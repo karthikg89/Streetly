@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<link rel="stylesheet" href="css/main.css" />
+	</head>
+	<body>
+		<div class="container">
+			<div class="options-box">
+				<input id="search-bar" type="text" placeholder="Enter your address" />
+			</div>
+			<div id="map"></div>
+		</div> 
+		<script>
+			var map;
+			var markers = [];
+			var API_KEY = "AIzaSyCsdv3xXN6h3CP0oe7pHn4C6AQwcTmfFZs";
+
+			// Initialize the map, centered in Berkeley
+			function initMap() {
+				map = new google.maps.Map(document.getElementById('map'), {
+					center: {lat: 37.85074, lng: -122.275276},
+					zoom: 13,
+					mapTypeControl: false
+				});
+			
+				// Setup autocomplete places search bar
+				var input = document.getElementById('search-bar');
+				var searchBox = new google.maps.places.SearchBox(input, map.getBounds());
+			
+				searchBox.addListener('places_changed', function() {
+					userSearchHandler();
+				});
+			
+				map.addListener('bounds_changed', function() {
+					searchBox.setBounds(map.getBounds());
+				});
+			
+
+
+				var defaultIcon = makeMarkerIcon('0091ff');
+				var geocoder = new google.maps.Geocoder;
+				
+				function clearMarkers() {
+					markers.forEach(function(marker) {
+						marker.setMap(null);
+					});
+					markers = [];
+				}
+				
+				// This function takes in a COLOR, and then creates a new marker
+				// icon of that color. The icon will be 21 px wide by 34 high, have an origin
+				// of 0, 0 and be anchored at 10, 34).
+				// Credit to Udacity Maps course
+				function makeMarkerIcon(markerColor) {
+					var markerImage = new google.maps.MarkerImage(
+						'http://chart.googleapis.com/chart?chst=d_map_spin&chld=1.15|0|'+ markerColor +
+						'|40|_|%E2%80%A2',
+						new google.maps.Size(21, 34),
+						new google.maps.Point(0, 0),
+						new google.maps.Point(10, 34),
+						new google.maps.Size(21,34));
+					return markerImage;
+				}
+				
+				function userSearchHandler() {
+					// This function should take a search place, geocode it
+					// send request to "Nearest Roads" API then query the DB
+					// serverside
+				
+					var places = searchBox.getPlaces();
+				
+					// TODO: Add Handler for this case
+					if (places.length == 0) {
+						console.log("Nothing found here");
+						return;
+					}
+					
+					// Hide old markers
+					clearMarkers();
+					
+					// Only include the first place
+					var place = places[0];
+				
+					if (!place.geometry) {
+						console.log("Place does not have geometry");
+						return;
+					}
+
+					markers.push(new google.maps.Marker({
+						map: map,
+						icon: defaultIcon,
+						title: place.name,
+						position: place.geometry.location
+					}));
+				
+					// Zoom to pin	
+					if (place.geometry.viewport) {
+						map.fitBounds(place.geometry.viewport);
+					} else {
+						map.setCenter(place.geometry.location);
+						map.setZoom(17);
+					}
+					
+					getNearestRoad(place);
+				}
+				
+				function addAddressToDB(geocode) {
+					var full_address = geocode.formatted_address;
+					var street_number, street_name, city, state;
+					var lat = geocode.geometry.location.lat();
+					var lng = geocode.geometry.location.lng();
+					
+					geocode.address_components.forEach(function(comp) {
+						if (comp.types.indexOf('street_number') != -1) {
+							street_number = comp.long_name;
+						} else if (comp.types.indexOf('route') != -1) {
+							street_name = comp.long_name;
+						} else if (comp.types.indexOf('locality') != -1) {
+							city = comp.types.long_name;
+						} else if (comp.types.indexOf('administrative_area_level_1') != -1) {
+							state = comp.types.long_name;
+						}
+					});
+					console.log(city);
+					console.log(state);
+
+					$.ajax({
+						url: '/api/insertAddress',
+						type: "POST",
+						data: {
+							full_address: full_address,
+							street_number: street_number,
+							street_name: street_name,
+							city: city,
+							state: state,
+							lat: lat,
+							lng: lng
+						}
+					}).done(function(data) {
+
+					});
+				}
+
+				// Makes ajax call to backend to check if address was listed
+				// geocode - geocode of road, has full name of block
+				function queryServerForGeocode(geocode) {
+					var full_address = geocode.formatted_address;
+					console.log(geocode);	
+					$.ajax({
+						url: '/api/streetLookup',
+						type: "POST",
+						data: {
+							full_address: full_address
+						}
+					}).done(function(data) {
+						if (data.length == 0) {
+							console.log('we do not have any data for this address');	
+							addAddressToDB(geocode);
+						} else {
+							console.log("found it");
+							console.log(data);
+						}
+					});
+				}
+		
+				// Makes ajax call to roads API to find nearest block
+				// calls function "queryServerForGeocode"
+				function getNearestRoad(place) {
+					var lat = place.geometry.location.lat();
+					var lng = place.geometry.location.lng();
+					var roadGeoCode;
+
+					// Add points, api key in ajax post
+					var nearestRoadsURL = "https://roads.googleapis.com/v1/nearestRoads";
+					$.ajax({
+						url: nearestRoadsURL,
+						type: "POST",
+						data: {
+							points: lat.toString() + "," + lng.toString(),
+							key: API_KEY
+						}
+					}).done(function(data) {
+						if (data.snappedPoints.length == 0) {
+							console.log("no nearby roads");
+						} else {
+							// Just take the first element, not sure if good assumption
+							var road = data.snappedPoints[0];
+							geocoder.geocode({
+								placeId: road.placeId
+							}, function(results, status) {
+								if (status != google.maps.GeocoderStatus.OK) {
+									console.log('Location not found/supported');
+								} else {
+									queryServerForGeocode(results[0]);
+								}
+							});
+						}
+					});
+				}
+			}
+			
+	</script>
+	
+	<script async defer
+		src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCsdv3xXN6h3CP0oe7pHn4C6AQwcTmfFZs&libraries=places&v=3&callback=initMap">
+	</script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+	</body>
+
+</html>

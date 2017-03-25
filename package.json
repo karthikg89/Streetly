@@ -1,0 +1,24 @@
+{
+  "name": "streetly",
+  "version": "1.0.0",
+  "description": "Berkeley street sweeping reminder service.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/karthikg89/Streetly.git"
+  },
+  "author": "Karthik Gopalan",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/karthikg89/Streetly/issues"
+  },
+  "homepage": "https://github.com/karthikg89/Streetly#readme",
+  "dependencies": {
+    "body-parser": "^1.17.1",
+    "express": "^4.15.2",
+    "pg": "^6.1.5"
+  }
+}
